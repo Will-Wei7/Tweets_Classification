@@ -118,7 +118,7 @@ def load_data(training_tweets_path, training_labels_path, test_tweets_path=None)
     return train_df, val_df
 
 # Training function
-def train_model(model, train_dataloader, val_dataloader, device, epochs=4):
+def train_model(model, train_dataloader, val_dataloader, device, class_weights=None, epochs=4):
     """Train the DistilBERT model."""
     # Optimizer
     optimizer = AdamW(model.parameters(), lr=2e-5, eps=1e-8)
@@ -158,7 +158,19 @@ def train_model(model, train_dataloader, val_dataloader, device, epochs=4):
                 labels=labels
             )
             
+            # Move class weights to device if provided
+            if class_weights is not None:
+                class_weights = class_weights.to(device)
+                logger.info(f"Using class weights: {class_weights}")
+            
+            # If class weights are provided, calculate weighted loss
             loss = outputs.loss
+            if class_weights is not None:
+                # The model's loss is already calculated, so we need to recalculate it with weights
+                logits = outputs.logits
+                loss_fct = torch.nn.CrossEntropyLoss(weight=class_weights)
+                loss = loss_fct(logits.view(-1, model.config.num_labels), labels.view(-1))
+            
             train_loss += loss.item()
             
             # Backward pass
@@ -297,12 +309,16 @@ def run_classifier(training_tweets_path, training_labels_path, test_tweets_path,
     
     model.to(device)
     
-    # Train model
+    # Calculate class weights to handle imbalance
+    class_weights = handle_class_imbalance(train_df)
+    
+    # Train model with class weights
     model, best_val_f1 = train_model(
         model=model,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
         device=device,
+        class_weights=class_weights,
         epochs=epochs
     )
     
