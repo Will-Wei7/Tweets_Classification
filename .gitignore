@@ -2,3 +2,5 @@
 /tweet_classifier_model
 /WN25_data
 __pycache__/main.cpython-311.pyc
+/saved_roberta_model
+/saved_DistilBERT_model
